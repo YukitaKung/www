@@ -5,16 +5,16 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import re
 import time
-from tkinter import Tk, filedialog
+import os
 from concurrent.futures import ThreadPoolExecutor
 
-# Speed settings
-PAGE_LOAD_TIMEOUT = 8  # Reduced from 10 seconds
-ACTION_DELAY = 1       # Reduced from 1.5 seconds
-BETWEEN_ACCOUNTS_DELAY = 1.5  # Reduced from 3 seconds
+# การตั้งค่าความเร็ว
+PAGE_LOAD_TIMEOUT = 8  # เวลารอโหลดหน้าเว็บ
+ACTION_DELAY = 1       # ความล่าช้าระหว่างการกระทำ
+BETWEEN_ACCOUNTS_DELAY = 1.5  # ความล่าช้าระหว่างบัญชี
 
 def setup_driver():
-    """Setup WebDriver with optimized options"""
+    """ตั้งค่า WebDriver ด้วยตัวเลือกที่ปรับแต่งแล้ว"""
     chrome_options = Options()
     chrome_options.add_argument("--disable-notifications")
     chrome_options.add_argument("--disable-popup-blocking")
@@ -25,16 +25,14 @@ def setup_driver():
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option("useAutomationExtension", False)
-
-    # Enable headless mode to avoid loading GUI
-    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--headless")  # โหมดไม่แสดงหน้าต่างเบราว์เซอร์
 
     driver = webdriver.Chrome(options=chrome_options)
     driver.set_page_load_timeout(PAGE_LOAD_TIMEOUT)
     return driver
 
 def process_account(driver, cookie, account_num, all_user_ids):
-    """Login and send friend requests"""
+    """เข้าสู่ระบบและส่งคำขอเป็นเพื่อน"""
     try:
         driver.get('https://www.roblox.com/login')
         WebDriverWait(driver, PAGE_LOAD_TIMEOUT).until(EC.presence_of_element_located((By.TAG_NAME, 'body')))
@@ -45,9 +43,9 @@ def process_account(driver, cookie, account_num, all_user_ids):
         WebDriverWait(driver, PAGE_LOAD_TIMEOUT).until(EC.url_contains("users/"))
         user_id = re.search(r'users/(\d+)/profile', driver.current_url).group(1)
 
-        print(f"[Account {account_num}] Logged in successfully: User ID {user_id}")
+        print(f"[บัญชีที่ {account_num}] เข้าสู่ระบบสำเร็จ: User ID {user_id}")
 
-        # Send friend requests
+        # ส่งคำขอเป็นเพื่อน
         for target_id in all_user_ids:
             if target_id != user_id:
                 driver.get(f'https://www.roblox.com/users/{target_id}/profile')
@@ -56,35 +54,47 @@ def process_account(driver, cookie, account_num, all_user_ids):
                         EC.element_to_be_clickable((By.XPATH, '//button[contains(.,"Add Friend") or contains(.,"Accept")]'))
                     )
                     button.click()
-                    print(f"  ✓ Friend request sent to {target_id}")
-                    time.sleep(ACTION_DELAY)  # Reduced action delay
+                    print(f"  ✓ ส่งคำขอเป็นเพื่อนไปยัง {target_id}")
+                    time.sleep(ACTION_DELAY)
                 except:
-                    pass  # No need to log error if button not found
-    
+                    pass  # ข้ามหากไม่พบปุ่ม
+
     except Exception as e:
-        print(f"[Account {account_num}] Error: {str(e)}")
+        print(f"[บัญชีที่ {account_num}] เกิดข้อผิดพลาด: {str(e)}")
 
 def main():
-    root = Tk()
-    root.withdraw()
-    file_path = filedialog.askopenfilename(title="Select cookies.txt file")
-    if not file_path:
-        print("No file selected.")
+    # รับ path ไฟล์จากผู้ใช้ผ่านคอนโซล
+    print("\n=== Roblox Friend Request Bot ===")
+    print("คำแนะนำ: ลากไฟล์ cookies.txt มาใส่ที่นี่ หรือพิมพ์ path เต็มของไฟล์")
+    file_path = input("Path ไฟล์ cookies.txt: ").strip('"')
+
+    # ตรวจสอบว่าไฟล์มีอยู่จริง
+    if not os.path.exists(file_path):
+        print("\n❌ ไม่พบไฟล์! กรุณาตรวจสอบอีกครั้ง")
+        print("1. ตรวจสอบว่าพิมพ์ path ถูกต้อง")
+        print("2. ลองลากไฟล์มาใส่ในคอนโซลโดยตรง")
         return
 
-    with open(file_path, 'r') as f:
-        cookies = [line.strip() for line in f if line.startswith('_|WARNING:-DO-NOT-SHARE-THIS.')]
+    # อ่านไฟล์ cookies
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            cookies = [line.strip() for line in f if line.startswith('_|WARNING:-DO-NOT-SHARE-THIS.')]
+    except Exception as e:
+        print(f"\n❌ เกิดข้อผิดพลาดขณะอ่านไฟล์: {str(e)}")
+        return
 
     if not cookies:
-        print("No valid cookies found.")
+        print("\n❌ ไม่พบ cookies ที่ถูกต้องในไฟล์")
+        print("โปรดตรวจสอบว่าไฟล์มีรูปแบบที่ถูกต้อง")
         return
 
-    print(f"\nFound {len(cookies)} accounts in the file.")
+    print(f"\nพบ {len(cookies)} บัญชีในไฟล์")
 
+    # ดึง User ID ทั้งหมด
     user_ids = []
     driver = setup_driver()
 
-    print("\nRetrieving User IDs...")
+    print("\nกำลังดึง User ID...")
     for i, cookie in enumerate(cookies, 1):
         try:
             driver.get('https://www.roblox.com/home')
@@ -94,20 +104,21 @@ def main():
             WebDriverWait(driver, PAGE_LOAD_TIMEOUT).until(EC.url_contains("users/"))
             user_id = re.search(r'users/(\d+)/profile', driver.current_url).group(1)
             user_ids.append(user_id)
-            print(f"[Account {i}] User ID: {user_id}")
+            print(f"[บัญชีที่ {i}] User ID: {user_id}")
         except Exception as e:
-            print(f"[Account {i}] Failed to retrieve User ID: {str(e)}")
-    
-    print("\nStarting friend request process...")
+            print(f"[บัญชีที่ {i}] ไม่สามารถดึง User ID ได้: {str(e)}")
 
-    # Use ThreadPoolExecutor for concurrent account processing
-    with ThreadPoolExecutor(max_workers=5) as executor:  # Set max_workers to 5
+    # เริ่มกระบวนการส่งคำขอเป็นเพื่อน
+    print("\nเริ่มกระบวนการส่งคำขอเป็นเพื่อน...")
+
+    # ใช้ ThreadPoolExecutor สำหรับการทำงานแบบคู่ขนาน
+    with ThreadPoolExecutor(max_workers=3) as executor:  # จำกัดการทำงานพร้อมกันที่ 3 บัญชี
         for i, cookie in enumerate(cookies, 1):
             executor.submit(process_account, setup_driver(), cookie, i, user_ids)
-            time.sleep(BETWEEN_ACCOUNTS_DELAY)  # Delay between accounts
+            time.sleep(BETWEEN_ACCOUNTS_DELAY)  # ล่าช้าระหว่างบัญชี
 
     driver.quit()
-    print("\nProcess complete.")
+    print("\n✅ กระบวนการเสร็จสมบูรณ์")
 
 if __name__ == "__main__":
     main()
